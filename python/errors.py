@@ -1,0 +1,2 @@
+class BotShouldBeInactive(Exception):
+    pass

@@ -1,0 +1,21 @@
+- hosts: all
+  vars_files:
+    - secrets.yaml
+  tasks:
+    - name: Init a new swarm with default parameters
+      community.docker.docker_swarm:
+        state: present
+
+    - name: Run bot docker service
+      docker_swarm_service:
+        name: spreadsheet-bot
+        image: twobrowin/spreadsheet-bot:1.0.1
+        env:
+          TZ: "Europe/Moscow"
+          
+          BOT_TOKEN: "{{ bot_token }}"
+          SHEETS_ACC_JSON: "{{ sheet_acc_json | string }}"
+          SHEETS_LINK: "{{ sheets_link }}"
+
+          SWITCH_UPDATE_TIME:   '15'
+          SETTINGS_UPDATE_TIME: '15'
