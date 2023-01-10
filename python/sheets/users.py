@@ -102,7 +102,6 @@ class UsersAdapterClass(AbstractSheetAdapter):
     
     async def _get_df(self) -> pd.DataFrame:
         df = pd.DataFrame(await self.wks.get_all_records())
-        df = df.drop(index = 0, axis = 0)
         df.chat_id = df.chat_id.apply(str)
         return df
     
@@ -212,7 +211,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
             template = registration_first.question
         ), reply_markup=ReplyKeyboardRemove())
         
-        await self._batch_update_or_create_record(update.effective_chat.id, tmp_index = 1,
+        await self._batch_update_or_create_record(update.effective_chat.id,
             datetime      = datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             username      = update.effective_chat.username,
             is_bot_banned = I18n.no,
@@ -243,7 +242,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
         if last_main_state:
             update_vals['is_active'] = I18n.yes
         
-        await self._batch_update_or_create_record(update.effective_chat.id, tmp_index = 1,
+        await self._batch_update_or_create_record(update.effective_chat.id,
             state = '' if last_state else registration_next.state,
             **update_vals
         )
@@ -332,7 +331,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
             Settings.user_change_message_reply_template.format(state=state),
             reply_markup=Keyboard.reply_keyboard
         )
-        await self._batch_update_or_create_record(update.effective_chat.id, tmp_index = 1,
+        await self._batch_update_or_create_record(update.effective_chat.id,
             state = '',
             **{
                 state: update.message.text
@@ -351,7 +350,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
     async def notification_reply_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         state = self.state(update.effective_chat.id)
         await update.message.reply_markdown(Notifications.get_reply_answer(state), reply_markup=ReplyKeyboardRemove())
-        await self._batch_update_or_create_record(update.effective_chat.id, tmp_index = 1,
+        await self._batch_update_or_create_record(update.effective_chat.id,
             state = '',
             **{state: update.message.text}
         )

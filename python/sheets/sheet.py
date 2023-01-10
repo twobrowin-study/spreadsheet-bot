@@ -109,14 +109,14 @@ class AbstractSheetAdapter():
         wks_col = self.wks_col(key)
         await self.wks.update_cell(wks_row, wks_col, value)
     
-    async def _batch_update_or_create_record(self, uid: str|int, tmp_index: int = 0, **record_params):
+    async def _batch_update_or_create_record(self, uid: str|int, **record_params):
         exists = self.exists(uid)
         record_action = 'update' if exists else 'create'
         Log.info(f"Prepeared to {record_action} record in table {self.name} with {self.uid_col} {uid}")
 
         if not exists:
             record_params[self.uid_col] = str(uid)
-            tmp_df = pd.DataFrame(record_params, columns=self.as_df.columns, index=[tmp_index]).fillna('')
+            tmp_df = pd.DataFrame(record_params, columns=self.as_df.columns, index=[0]).fillna('')
             if self.as_df.empty:
                 self.as_df = tmp_df
             else:
