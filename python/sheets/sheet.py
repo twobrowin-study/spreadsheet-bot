@@ -4,12 +4,17 @@ import gspread_asyncio
 from gspread import utils
 import pandas as pd
 
-from telegram import Bot, InlineKeyboardMarkup
+from telegram import (
+    Bot,
+    InlineKeyboardMarkup,
+    Document
+)
 from telegram.ext.filters import MessageFilter
 
 from google.oauth2.service_account import Credentials 
 
 from settings import SheetsSecret, SheetsLink
+from drive import SaveToDrive
 
 from log import Log
 
@@ -109,11 +114,20 @@ class AbstractSheetAdapter():
         wks_col = self.wks_col(key)
         await self.wks.update_cell(wks_row, wks_col, value)
     
-    async def _batch_update_or_create_record(self, uid: str|int, **record_params):
+    async def _batch_update_or_create_record(self, uid: str|int, save_to = None, save_as = None, app: Application = None, **record_params):
         exists = self.exists(uid)
         record_action = 'update' if exists else 'create'
         Log.info(f"Prepeared to {record_action} record in table {self.name} with {self.uid_col} {uid}")
 
+        get_file = None
+        for key,val in record_params.items():
+            if type(val) in [list, tuple]:
+                record_params[key] = val[-1].to_json()
+                get_file = val[-1].get_file
+            if type(val) == Document:
+                record_params[key] = val.to_json()
+                get_file = val.get_file
+        
         if not exists:
             record_params[self.uid_col] = str(uid)
             tmp_df = pd.DataFrame(record_params, columns=self.as_df.columns, index=[0]).fillna('')
@@ -131,6 +145,8 @@ class AbstractSheetAdapter():
             for key, value in record_params.items()
         ])
         await self.wks.batch_update(wks_update)
+        if get_file != None and save_to != None and save_as != None and app != None:
+            app.create_task(SaveToDrive(self.agc.gc.auth.token, save_to, save_as, get_file))
         Log.info(f"Done {record_action} record in table {self.name} with {self.uid_col} {uid}")
     
     def _get(self, selector, iloc = 0) -> pd.Series:

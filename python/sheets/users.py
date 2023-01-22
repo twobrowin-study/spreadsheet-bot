@@ -8,7 +8,8 @@ from telegram import (
     Chat,
     ReplyKeyboardRemove,
     InlineKeyboardMarkup,
-    InlineKeyboardButton
+    InlineKeyboardButton,
+    TelegramObject
 )
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
@@ -69,19 +70,20 @@ class UsersAdapterClass(AbstractSheetAdapter):
         self.wks_col_pad = 1
         self.uid_col     = 'chat_id'
 
-        self.state = lambda uid: self._get(self.selector(uid)).state
+        self.get   = lambda uid: self._get(self.selector(uid))
+        self.state = lambda uid: self.get(uid).state
         self.active_user_count  = lambda: self.as_df.loc[self.as_df.is_active == I18n.yes].shape[0]
         self.should_send_report = lambda count: count % Report.send_every_x_active_users == 0
 
         self.is_active = lambda user: user.is_active == I18n.yes
         self.user_data_markdown = lambda user: "\n".join([
-            f"{state}: *{user[state]}*"
+            f"{state}: *{user[state] if not Registration.is_document_state(state) else state}*"
             for state in Registration.main_states
         ]) + f"\n*{I18n.is_active if self.is_active(user) else I18n.is_inactive}*"
         self.user_data_inline_keyboard = lambda user: InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    user[state],
+                    user[state] if not Registration.is_document_state(state) else state,
                     callback_data=self.CALLBACK_USER_TEMPLATE.format(state=state))
             ]
             for state in Registration.main_states
@@ -124,6 +126,15 @@ class UsersAdapterClass(AbstractSheetAdapter):
             )
         except Exception:
             Log.debug(f"Was not able to edit a message for chat id {chat_id}")
+
+    def _prepare_state_to_save(self, message: Message, document_link: str) -> tuple[str|TelegramObject|None, str|None]:
+        if document_link in ["", None]:
+            return(message.text, None)
+        elif len(message.photo) != 0:
+            return(message.photo, document_link)
+        elif message.document != None:
+            return(message.document, document_link)
+        return (None, None)
     
     async def send_to_all_users_and_set_state(self, bot: Bot, message: str, parse_mode: str, 
         send_photo: str = None, reply_state: str = None, is_text_reply: str = ''
@@ -227,22 +238,30 @@ class UsersAdapterClass(AbstractSheetAdapter):
         )
     
     async def proceed_registration_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        state = self.state(update.effective_chat.id)
+        user    = self.get(update.effective_chat.id)
+        state   = user.state
+        save_as = user[Settings.user_document_name_field]
+        registration_curr = Registration.get(state)
         registration_next = Registration.get_next(state)
 
         last_main_state = (state == Registration.last_main_state)
         last_state      = (state == Registration.last_state)
+
+        state_val, save_to = self._prepare_state_to_save(update.message, registration_curr.document_link)
+        if state_val == None:
+            await update.message.reply_markdown(registration_curr.question, reply_markup=registration_curr.reply_keyboard)
+            return
 
         if last_state:
             await update.message.reply_markdown(Settings.registration_complete, reply_markup=Keyboard.reply_keyboard)
         else:
             await update.message.reply_markdown(registration_next.question, reply_markup=registration_next.reply_keyboard)
 
-        update_vals = {state: update.message.text}
+        update_vals = {state: state_val}
         if last_main_state:
             update_vals['is_active'] = I18n.yes
         
-        await self._batch_update_or_create_record(update.effective_chat.id,
+        await self._batch_update_or_create_record(update.effective_chat.id, save_to=save_to, save_as=save_as, app=context.application,
             state = '' if last_state else registration_next.state,
             **update_vals
         )
@@ -301,10 +320,11 @@ class UsersAdapterClass(AbstractSheetAdapter):
     async def change_state_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer()
         state = update.callback_query.data.removeprefix(self.CALLBACK_USER_CHANGE_STATE_PREFIX)
+        registration = Registration.get(state)
         await context.bot.send_message(
             update.effective_chat.id,
-            Settings.user_change_callback_reply_template.format(state=state),
-            reply_markup=ReplyKeyboardRemove(),
+            registration.question,
+            reply_markup=registration.reply_keyboard,
             parse_mode=ParseMode.MARKDOWN
         )
         await self._update_record(update.effective_chat.id, 'state',
@@ -319,22 +339,31 @@ class UsersAdapterClass(AbstractSheetAdapter):
         template = Settings.user_template_from_update(update)
         complex_state = self.state(update.effective_chat.id)
         _,state,_ = re.split(self.CALLBACK_USER_CHANGE_STATE_SEPARATORS, complex_state)
+        registration = Registration.get(state)
         await update.message.reply_markdown(
-            template.format(template = Settings.user_change_callback_reply_template.format(state=state)),
-            reply_markup=ReplyKeyboardRemove()
+            template.format(template = registration.question),
+            reply_markup=registration.reply_keyboard
         )
     
     async def change_state_reply_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        complex_state = self.state(update.effective_chat.id)
-        _,state,message_id = re.split(self.CALLBACK_USER_CHANGE_STATE_SEPARATORS, complex_state)
+        user = self.get(update.effective_chat.id)
+        _,state,message_id = re.split(self.CALLBACK_USER_CHANGE_STATE_SEPARATORS, user.state)
+        save_as = user[Settings.user_document_name_field]
+        registration = Registration.get(state)
+
+        state_val, save_to = self._prepare_state_to_save(update.message, registration.document_link)
+        if state_val == None:
+            await update.message.reply_markdown(registration.question, reply_markup=registration.reply_keyboard)
+            return
+
         await update.message.reply_markdown(
             Settings.user_change_message_reply_template.format(state=state),
             reply_markup=Keyboard.reply_keyboard
         )
-        await self._batch_update_or_create_record(update.effective_chat.id,
+        await self._batch_update_or_create_record(update.effective_chat.id, save_to=save_to, save_as=save_as, app=context.application,
             state = '',
             **{
-                state: update.message.text
+                state: state_val
             }
         )
         await self._change_message_after_callback(update.effective_chat.id, message_id, context.bot)
@@ -348,11 +377,20 @@ class UsersAdapterClass(AbstractSheetAdapter):
         )
     
     async def notification_reply_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        state = self.state(update.effective_chat.id)
-        await update.message.reply_markdown(Notifications.get_reply_answer(state), reply_markup=ReplyKeyboardRemove())
-        await self._batch_update_or_create_record(update.effective_chat.id,
+        user    = self.get(update.effective_chat.id)
+        state   = user.state
+        save_as = user[Settings.user_document_name_field]
+        notification = Notifications.get(state)
+
+        state_val, save_to = self._prepare_state_to_save(update.message, notification.reply_document_link)
+        if state_val == None:
+            await update.message.reply_markdown(notification.text_markdown, reply_markup=ReplyKeyboardRemove())
+            return
+
+        await update.message.reply_markdown(notification.reply_answer, reply_markup=Keyboard.reply_keyboard)
+        await self._batch_update_or_create_record(update.effective_chat.id, save_to=save_to, save_as=save_as, app=context.application,
             state = '',
-            **{state: update.message.text}
+            **{state: state_val}
         )
     
     async def answer_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

@@ -7,13 +7,12 @@ from sheets.i18n import I18n
 from sheets.settings import Settings
 
 class KeyboardAdapterClass(AbstractSheetAdapter):
-    REGISTER_FUNCTION = 'register'
-
     def __init__(self) -> None:
         super().__init__('keyboard', 'keyboard', None, True)
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.keyboard
+        self.REGISTER_FUNCTION = I18n.register
         self.update_sleep_time = Settings.keyboard_update_time
     
     async def _get_df(self) -> pd.DataFrame:

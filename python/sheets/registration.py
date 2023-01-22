@@ -35,6 +35,8 @@ class RegistrationAdapterClass(AbstractSheetAdapter):
         self.last_state = self.states[-1]
         self.last_main_state = self.main_states[-1]
 
+        self.is_document_state = lambda state: self.get(state).document_link not in ["", None]
+
     def _get(self, selector, iloc=0) -> pd.Series:
         curr = super()._get(selector, iloc)
         if type(curr) != pd.Series and curr == None:
