@@ -25,7 +25,7 @@ class KeyboardAdapterClass(AbstractSheetAdapter):
         return df
     
     async def _process_df_update(self):
-        self.keys = self.as_df.key.values
+        self.keys = self.as_df.key.values.tolist()
         self.reply_keyboard = ReplyKeyboardMarkup([
             self.keys[idx:idx+2]
             for idx in range(0,len(self.keys),2)

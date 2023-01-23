@@ -296,11 +296,19 @@ class UsersAdapterClass(AbstractSheetAdapter):
                 keyboard_row.text_markdown,
                 reply_markup=Keyboard.reply_keyboard
             )
-        elif keyboard_row.send_picture != '':
+        elif keyboard_row.send_picture != '' and len(keyboard_row.text_markdown) <= 1024:
             await update.message.reply_photo(
                 keyboard_row.send_picture,
                 caption=keyboard_row.text_markdown,
                 parse_mode=ParseMode.MARKDOWN,
+                reply_markup=Keyboard.reply_keyboard
+            )
+        elif keyboard_row.send_picture != '' and len(keyboard_row.text_markdown) > 1024:
+            await update.message.reply_markdown(
+                keyboard_row.text_markdown
+            )
+            await update.message.reply_photo(
+                keyboard_row.send_picture,
                 reply_markup=Keyboard.reply_keyboard
             )
     
