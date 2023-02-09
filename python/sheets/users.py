@@ -410,7 +410,10 @@ class UsersAdapterClass(AbstractSheetAdapter):
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=Keyboard.reply_keyboard
         )
-        state = Notifications.get_reply_state(update.callback_query.message.text_markdown)
+        text_markdown = update.callback_query.message.text_markdown
+        if text_markdown in [None, ""]:
+            text_markdown = update.callback_query.message.caption_markdown
+        state = Notifications.get_reply_state(text_markdown)
         await self._update_record(update.effective_chat.id, state, I18n.yes if answer_yes else I18n.no)
     
     async def strange_error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
