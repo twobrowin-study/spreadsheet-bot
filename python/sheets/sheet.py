@@ -44,6 +44,8 @@ class AbstractSheetAdapter():
         self.wks_col  = lambda key: self.as_df.columns.get_loc(key) + self.wks_col_pad
         self.selector = lambda uid: (self.as_df[self.uid_col] == str(uid))
         self.exists   = lambda uid: not self.as_df.loc[self.selector(uid)].empty
+
+        self.mutex = []
     
     async def async_init(self):
         await self._pre_async_init()
@@ -75,6 +77,11 @@ class AbstractSheetAdapter():
     async def update(self, app: Application) -> None:
         await self._pre_update()
         await asyncio.sleep(self.update_sleep_time)
+        Log.info(f"Prepared to update whole df {self.name}")
+        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
+        while len(self.mutex) > 0:
+            Log.info(f"Update is halted at {self.name}")
+            await asyncio.sleep(self.update_sleep_time)
         app.create_task(self.update(app))
         await self._connect()
         self.as_df = await self._get_df()
@@ -106,18 +113,26 @@ class AbstractSheetAdapter():
         } for x in rowcols ]
     
     async def _update_record(self, uid: str|int, key: str, value: str):
+        self.mutex.append(uid)
         selector = self.selector(uid)
         if self.as_df.loc[selector].empty:
             return
         self.as_df.loc[selector, key] = value
         wks_row = self.wks_row(uid)
         wks_col = self.wks_col(key)
+        Log.info(f"Prepeared to update single record in table {self.name} with {self.uid_col} {uid}")
+        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
         await self.wks.update_cell(wks_row, wks_col, value)
+        del self.mutex[self.mutex.index(uid)]
+        Log.info(f"Done update single record in table {self.name} with {self.uid_col} {uid}")
+        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
     
     async def _batch_update_or_create_record(self, uid: str|int, save_to = None, save_as = None, app: Application = None, **record_params):
+        self.mutex.append(uid)
         exists = self.exists(uid)
         record_action = 'update' if exists else 'create'
         Log.info(f"Prepeared to {record_action} record in table {self.name} with {self.uid_col} {uid}")
+        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
 
         get_file = None
         for key,val in record_params.items():
@@ -147,7 +162,9 @@ class AbstractSheetAdapter():
         await self.wks.batch_update(wks_update)
         if get_file != None and save_to != None and save_as != None and app != None:
             app.create_task(SaveToDrive(self.agc.gc.auth.token, save_to, save_as, get_file))
+        del self.mutex[self.mutex.index(uid)]
         Log.info(f"Done {record_action} record in table {self.name} with {self.uid_col} {uid}")
+        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
     
     def _get(self, selector, iloc = 0) -> pd.Series:
         row = self.as_df.loc[selector]
