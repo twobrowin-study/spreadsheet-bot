@@ -214,6 +214,9 @@ class UsersAdapterClass(AbstractSheetAdapter):
     
     async def registration_is_over_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_markdown(Settings.registration_is_over, reply_markup=ReplyKeyboardRemove())
+    
+    async def edited_message_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.edited_message.reply_markdown(Settings.edited_message_reply)
         
     async def start_registration_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         registration_first = Registration.first
