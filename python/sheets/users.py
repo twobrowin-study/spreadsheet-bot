@@ -13,6 +13,9 @@ from telegram import (
 )
 from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
+from telegram.ext.filters import (
+    UpdateType
+)
 
 from sheets.i18n import I18n
 from sheets.switch import Switch
@@ -51,6 +54,8 @@ class UsersAdapterClass(AbstractSheetAdapter):
         self.PrivateChatFilter                = self.PrivateChatClass(outer_obj=self)
         self.IsRegistrationOpenedFilter       = self.IsRegistrationOpenedClass(outer_obj=self)
         self.IsRegisteredFilter               = self.PrivateChatFilter & self.IsRegisteredClass(outer_obj=self)
+
+        self.EditedMessageFilter = self.PrivateChatFilter & UpdateType.EDITED_MESSAGE
 
         self.HasActiveRegistrationStateFilter = self.IsRegisteredFilter & self.HasActiveRegistrationStateClass(outer_obj=self)
         self.HasNoRegistrationStateFilter     = self.IsRegisteredFilter & self.HasNoRegistrationStateClass(outer_obj=self)

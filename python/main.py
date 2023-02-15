@@ -9,9 +9,6 @@ from telegram.ext import (
     MessageHandler,
     CallbackQueryHandler,
 )
-from telegram.ext.filters import (
-    UpdateType
-)
 
 from settings import BotToken
 
@@ -119,7 +116,7 @@ if __name__ == '__main__':
     )
 
     app.add_handler(
-        MessageHandler(UpdateType.EDITED_MESSAGE, Users.edited_message_handler, block=False),
+        MessageHandler(Users.EditedMessageFilter, Users.edited_message_handler, block=False),
         group=UPDATE_GROUP_USER_REQUEST
     )
 
