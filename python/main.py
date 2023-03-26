@@ -147,12 +147,12 @@ if __name__ == '__main__':
     ], group=UPDATE_GROUP_USER_REQUEST)
 
     app.add_handlers([
-        CommandHandler(START_COMMAND, Users.restart_help_notification_handler, filters=Users.HasAnyRegistrationStateFilter, block=False),
-        CommandHandler(HELP_COMMAND,  Users.restart_help_notification_handler, filters=Users.HasAnyRegistrationStateFilter, block=False),
-        MessageHandler(Users.HasAnyRegistrationStateFilter, Users.notification_reply_handler, block=False),
+        CallbackQueryHandler(Users.notification_set_state_callback_handler, pattern=Users.CALLBACK_NOTIFICATION_SET_STATE_PATTERN, block=False),
+        CallbackQueryHandler(Users.notification_answer_callback_handler,    pattern=Users.CALLBACK_NOTIFICATION_ANSWER_PATTERN,    block=False),
+        CommandHandler(START_COMMAND, Users.restart_help_notification_handler, filters=Users.HasNotificationRegistrationStateFilter, block=False),
+        CommandHandler(HELP_COMMAND,  Users.restart_help_notification_handler, filters=Users.HasNotificationRegistrationStateFilter, block=False),
+        MessageHandler(Users.HasNotificationRegistrationStateFilter, Users.notification_reply_handler, block=False),
     ], group=UPDATE_GROUP_USER_REQUEST)
-
-    app.add_handler(CallbackQueryHandler(Users.answer_callback_handler, pattern=Users.CALLBACK_USER_ANSWER_PATTERN, block=False))
     
     app.add_handler(MessageHandler(Users.StrangeErrorFilter, Users.strange_error_handler, block=False), group=UPDATE_GROUP_USER_REQUEST)
 

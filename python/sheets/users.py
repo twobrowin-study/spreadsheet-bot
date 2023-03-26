@@ -32,21 +32,25 @@ from datetime import datetime
 import re
 
 class UsersAdapterClass(AbstractSheetAdapter):
-    CALLBACK_USER_SET_INACTIVE = 'user_set_inactive'
-    CALLBACK_USER_SET_ACTIVE   = 'user_set_active'
-
-    CALLBACK_USER_ANSWER_YES = 'user_answer_yes'
-    CALLBACK_USER_ANSWER_NO  = 'user_answer_no'
-
-    CALLBACK_USER_CHANGE_STATE_PREFIX  = 'user_change_'
-    CALLBACK_USER_TEMPLATE             = 'user_change_{state}'
-
+    CALLBACK_USER_SET_INACTIVE         = 'user_set_inactive'
+    CALLBACK_USER_SET_ACTIVE           = 'user_set_active'
     CALLBACK_USER_ACTIVE_STATE_PATTERN = 'user_set_(in|)active'
-    CALLBACK_USER_ANSWER_PATTERN       = 'user_answer_(yes|no)'
-    CALLBACK_USER_CHANGE_STATE_PATTERN = 'user_change_.*'
 
-    CALLBACK_USER_CHANGE_STATE_TEMPLATE   = '{user_change}_{state}@{message_id}'
-    CALLBACK_USER_CHANGE_STATE_SEPARATORS = '_|@'
+    CALLBACK_USER_CHANGE_STATE_PREFIX   = 'user_change_'
+    CALLBACK_USER_CHANGE_STATE_TEMPLATE = 'user_change_{state}'
+    CALLBACK_USER_CHANGE_STATE_PATTERN  = 'user_change_.*'
+
+    USER_CHANGE_STATE_TEMPLATE   = '{user_change}_{state}@{message_id}'
+    USER_CHANGE_STATE_SEPARATORS = '_|@'
+
+    CALLBACK_NOTIFICATION_SET_STATE_PREFIX   = 'user_notification_set_state_'
+    CALLBACK_NOTIFICATION_SET_STATE_TEMPLATE = 'user_notification_set_state_{state}'
+    CALLBACK_NOTIFICATION_SET_STATE_PATTERN  = 'user_notification_set_state_*'
+
+    CALLBACK_NOTIFICATION_ANSWER_PREFIX    = 'user_notification_answer_'
+    CALLBACK_NOTIFICATION_ANSWER_TEMPLATE  = 'user_notification_answer_{state}_{answer}'
+    CALLBACK_NOTIFICATION_ANSWER_PATTERN   = 'user_notification_answer_*'
+    CALLBACK_NOTIFICATION_ANSWER_SEPARATOR = '_'
 
     def __init__(self) -> None:
         super().__init__('users', 'users', None, True)
@@ -57,10 +61,10 @@ class UsersAdapterClass(AbstractSheetAdapter):
 
         self.EditedMessageFilter = self.PrivateChatFilter & UpdateType.EDITED_MESSAGE
 
-        self.HasActiveRegistrationStateFilter = self.IsRegisteredFilter & self.HasActiveRegistrationStateClass(outer_obj=self)
-        self.HasNoRegistrationStateFilter     = self.IsRegisteredFilter & self.HasNoRegistrationStateClass(outer_obj=self)
-        self.HasChangeRegistrationStateFilter = self.IsRegisteredFilter & self.HasChangeRegistrationStateClass(outer_obj=self)
-        self.HasAnyRegistrationStateFilter    = self.IsRegisteredFilter & self.HasAnyRegistrationStateClass(outer_obj=self)
+        self.HasActiveRegistrationStateFilter       = self.IsRegisteredFilter & self.HasActiveRegistrationStateClass(outer_obj=self)
+        self.HasNoRegistrationStateFilter           = self.IsRegisteredFilter & self.HasNoRegistrationStateClass(outer_obj=self)
+        self.HasChangeRegistrationStateFilter       = self.IsRegisteredFilter & self.HasChangeRegistrationStateClass(outer_obj=self)
+        self.HasNotificationRegistrationStateFilter = self.IsRegisteredFilter & self.HasNotificationRegistrationStateClass(outer_obj=self)
 
         self.IsNotRegisteredFilter    = ~self.IsRegisteredFilter
 
@@ -89,7 +93,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
             [
                 InlineKeyboardButton(
                     user[state] if not Registration.is_document_state(state) else state,
-                    callback_data=self.CALLBACK_USER_TEMPLATE.format(state=state))
+                    callback_data=self.CALLBACK_USER_CHANGE_STATE_TEMPLATE.format(state=state))
             ]
             for state in Registration.main_states
         ] + [[
@@ -141,16 +145,22 @@ class UsersAdapterClass(AbstractSheetAdapter):
             return(message.document, document_link)
         return (None, None)
     
-    async def send_to_all_users_and_set_state(self, bot: Bot, message: str, parse_mode: str, 
-        send_photo: str = None, reply_state: str = None, is_text_reply: str = ''
+    async def send_notification_to_all_users(self, bot: Bot, message: str, parse_mode: str, 
+        send_photo: str = None, state: str = None, button_text: list[str] = ''
     ):
         reply_markup = None
-        if is_text_reply == I18n.yes:
-            reply_markup = ReplyKeyboardRemove()
-        elif is_text_reply == I18n.no:
+        if len(button_text) == 1:
             reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton(I18n.yes, callback_data=self.CALLBACK_USER_ANSWER_YES)],
-                [InlineKeyboardButton(I18n.no,  callback_data=self.CALLBACK_USER_ANSWER_NO)],
+                [InlineKeyboardButton(button_text[0],
+                    callback_data=self.CALLBACK_NOTIFICATION_SET_STATE_TEMPLATE.format(state=state)
+                )]
+            ])
+        elif len(button_text) > 1:
+            reply_markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton(bttn_txt,
+                    callback_data=self.CALLBACK_NOTIFICATION_ANSWER_TEMPLATE.format(state=state, answer=bttn_txt)
+                )]
+                for bttn_txt in button_text
             ])
         
         await self._send_to_all_uids(
@@ -159,15 +169,6 @@ class UsersAdapterClass(AbstractSheetAdapter):
             send_photo,
             reply_markup=reply_markup
         )
-        if is_text_reply == I18n.yes and reply_state != '' and reply_state != None:
-            self.as_df.loc[self.selector_all_active(), 'state'] = reply_state
-            wks_rows = self.as_df.loc[self.selector_all_active()].index.values + self.wks_row_pad
-            wks_col  = self.wks_col('state')
-            wks_update = self._prepare_batch_update([
-                (wks_row, wks_col, reply_state)
-                for wks_row in wks_rows
-            ])
-            await self.wks.batch_update(wks_update)
     
     class PrivateChatClass(AbstractSheetAdapter.AbstractFilter):
         def filter(self, message: Message) -> bool:
@@ -205,12 +206,12 @@ class UsersAdapterClass(AbstractSheetAdapter):
                 (df.state.str.startswith(I18n.user_change))
             ].empty
 
-    class HasAnyRegistrationStateClass(AbstractSheetAdapter.AbstractFilter):
+    class HasNotificationRegistrationStateClass(AbstractSheetAdapter.AbstractFilter):
         def filter(self, message: Message) -> bool:
             df = self.outer_obj.as_df
             return not df.loc[
                 (self.outer_obj.selector(message.chat_id)) &
-                (df.state != '')
+                (df.state.isin(Notifications.states))
             ].empty
     
     class InputInKeyboardKeysClass(AbstractSheetAdapter.AbstractFilter):
@@ -344,7 +345,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
             parse_mode=ParseMode.MARKDOWN
         )
         await self._update_record(update.effective_chat.id, 'state',
-            self.CALLBACK_USER_CHANGE_STATE_TEMPLATE.format(
+            self.USER_CHANGE_STATE_TEMPLATE.format(
                 user_change = I18n.user_change,
                 state       = state,
                 message_id  = update.callback_query.message.message_id,
@@ -354,7 +355,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
     async def restart_help_change_state_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         template = Settings.user_template_from_update(update)
         complex_state = self.state(update.effective_chat.id)
-        _,state,_ = re.split(self.CALLBACK_USER_CHANGE_STATE_SEPARATORS, complex_state)
+        _,state,_ = re.split(self.USER_CHANGE_STATE_SEPARATORS, complex_state)
         registration = Registration.get(state)
         await update.message.reply_markdown(
             template.format(template = registration.question),
@@ -363,7 +364,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
     
     async def change_state_reply_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user = self.get(update.effective_chat.id)
-        _,state,message_id = re.split(self.CALLBACK_USER_CHANGE_STATE_SEPARATORS, user.state)
+        _,state,message_id = re.split(self.USER_CHANGE_STATE_SEPARATORS, user.state)
         save_as = user[Settings.user_document_name_field]
         registration = Registration.get(state)
 
@@ -392,37 +393,46 @@ class UsersAdapterClass(AbstractSheetAdapter):
             reply_markup=ReplyKeyboardRemove()
         )
     
+    async def notification_set_state_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.callback_query.answer()
+        state = update.callback_query.data.removeprefix(self.CALLBACK_NOTIFICATION_SET_STATE_PREFIX)
+        await context.bot.send_message(
+            update.effective_chat.id,
+            Notifications.get_button_answer(state),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=ReplyKeyboardRemove()
+        )
+        await self._update_record(update.effective_chat.id, 'state', state)
+    
+    async def notification_answer_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        await update.callback_query.answer()
+        state,answer = update.callback_query.data\
+            .removeprefix(self.CALLBACK_NOTIFICATION_ANSWER_PREFIX)\
+            .split(self.CALLBACK_NOTIFICATION_ANSWER_SEPARATOR)
+        await context.bot.send_message(
+            update.effective_chat.id,
+            Notifications.get_button_answer(state, answer),
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=Keyboard.reply_keyboard
+        )
+        await self._update_record(update.effective_chat.id, state, answer)
+    
     async def notification_reply_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user    = self.get(update.effective_chat.id)
         state   = user.state
         save_as = user[Settings.user_document_name_field]
         notification = Notifications.get(state)
 
-        state_val, save_to = self._prepare_state_to_save(update.message, notification.reply_document_link)
+        state_val, save_to = self._prepare_state_to_save(update.message, notification.document_link)
         if state_val == None:
-            await update.message.reply_markdown(notification.text_markdown, reply_markup=ReplyKeyboardRemove())
+            await update.message.reply_markdown(notification.button_answer[0], reply_markup=ReplyKeyboardRemove())
             return
 
-        await update.message.reply_markdown(notification.reply_answer, reply_markup=Keyboard.reply_keyboard)
+        await update.message.reply_markdown(notification.button_answer[1], reply_markup=Keyboard.reply_keyboard)
         await self._batch_update_or_create_record(update.effective_chat.id, save_to=save_to, save_as=save_as, app=context.application,
             state = '',
             **{state: state_val}
         )
-    
-    async def answer_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        await update.callback_query.answer()
-        answer_yes = update.callback_query.data == self.CALLBACK_USER_ANSWER_YES
-        await context.bot.send_message(
-            update.effective_chat.id,
-            Notifications.reply_to_yes if answer_yes else Notifications.reply_to_no,
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=Keyboard.reply_keyboard
-        )
-        text_markdown = update.callback_query.message.text_markdown
-        if text_markdown in [None, ""]:
-            text_markdown = update.callback_query.message.caption_markdown
-        state = Notifications.get_reply_state(text_markdown)
-        await self._update_record(update.effective_chat.id, state, I18n.yes if answer_yes else I18n.no)
     
     async def strange_error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_markdown(Settings.strange_user_error, reply_markup=ReplyKeyboardRemove())

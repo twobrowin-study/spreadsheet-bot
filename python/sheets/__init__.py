@@ -18,11 +18,12 @@ from log import Log
 async def PerfomNotification(app: Application):
     Log.info("Start performing notification")
     for idx,row in Notifications.as_df.loc[Notifications.selector_to_notify()].iterrows():
-        await Users.send_to_all_users_and_set_state(
+        await Users.send_notification_to_all_users(
             app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture,
-            row.reply_state, row.is_text_reply
+            row.state, row.button_text
         )
-        await Groups.send_to_all_normal_groups(app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture)
+        if row.state == "":
+            await Groups.send_to_all_normal_groups(app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture)
         await Groups.send_to_all_admin_groups(
             app.bot, 
             Settings.notification_admin_groups_template.format(message=row.text_markdown),
