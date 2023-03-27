@@ -157,10 +157,10 @@ class UsersAdapterClass(AbstractSheetAdapter):
             ])
         elif len(button_text) > 1:
             reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton(bttn_txt,
-                    callback_data=self.CALLBACK_NOTIFICATION_ANSWER_TEMPLATE.format(state=state, answer=bttn_txt)
+                [InlineKeyboardButton(button_text[idx],
+                    callback_data=self.CALLBACK_NOTIFICATION_ANSWER_TEMPLATE.format(state=state, answer=idx)
                 )]
-                for bttn_txt in button_text
+                for idx in range(len(button_text))
             ])
         
         await self._send_to_all_uids(
@@ -406,12 +406,13 @@ class UsersAdapterClass(AbstractSheetAdapter):
     
     async def notification_answer_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer()
-        state,answer = update.callback_query.data\
+        state,answer_idx = update.callback_query.data\
             .removeprefix(self.CALLBACK_NOTIFICATION_ANSWER_PREFIX)\
             .split(self.CALLBACK_NOTIFICATION_ANSWER_SEPARATOR)
+        text,answer = Notifications.get_button_answer(state, int(answer_idx))
         await context.bot.send_message(
             update.effective_chat.id,
-            Notifications.get_button_answer(state, answer),
+            text,
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=Keyboard.reply_keyboard
         )

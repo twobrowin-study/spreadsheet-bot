@@ -60,12 +60,12 @@ class NotificationsAdapterClass(AbstractSheetAdapter):
     def get_text_markdown(self, state: str) -> str:
         return self.get(state).text_markdown
     
-    def get_button_answer(self, state: str, answer: str = "") -> str:
+    def get_button_answer(self, state: str, answer_idx: int = None) -> str|tuple[str,str]:
         row = self.get(state)
         if len(row.button_text) == 1:
             return row.button_answer[0]
-        if len(row.button_text) > 1 and answer in row.button_text:
-            return row.button_answer[row.button_text.index(answer)]
+        if len(row.button_text) > 1 and answer_idx in range(len(row.button_text)):
+            return row.button_answer[answer_idx], row.button_text[answer_idx]
         return None
 
 Notifications = NotificationsAdapterClass()
