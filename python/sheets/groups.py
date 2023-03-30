@@ -11,7 +11,7 @@ from sheets.report import Report
 
 class GroupsAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('groups', 'groups', None, True)
+        super().__init__('groups', 'groups', initialize_as_df=True)
         self.GroupChatFilter    = self.GroupChatClass(outer_obj=self)
         self.IsRegisteredFilter = self.GroupChatFilter & self.IsRegisteredClass(outer_obj=self)
         self.IsAdminFilter      = self.GroupChatFilter & self.IsAdminClass(outer_obj=self)

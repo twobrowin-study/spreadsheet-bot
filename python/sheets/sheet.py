@@ -30,10 +30,11 @@ def get_creds():
 agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
 
 class AbstractSheetAdapter():
-    def __init__(self, sheet_name: str, name: str, update_sleep_time: int = None, initialize_as_df: bool = False) -> None:
+    def __init__(self, sheet_name: str, name: str, update_sleep_time: int = None, retry_sleep_time: int = None, initialize_as_df: bool = False) -> None:
         self.sheet_name = sheet_name
         self.name = name
         self.update_sleep_time = update_sleep_time
+        self.retry_sleep_time = retry_sleep_time if retry_sleep_time is not None else update_sleep_time
         self.initialize_as_df = initialize_as_df
 
         self.wks_row_pad = 1
@@ -77,15 +78,19 @@ class AbstractSheetAdapter():
     async def update(self, app: Application) -> None:
         await self._pre_update()
         await asyncio.sleep(self.update_sleep_time)
+        
         Log.info(f"Prepared to update whole df {self.name}")
-        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
         while len(self.mutex) > 0:
-            Log.info(f"Update is halted at {self.name}")
-            await asyncio.sleep(self.update_sleep_time)
+            Log.info(f"Halted whole df update at {self.name} with mutex {self.mutex}")
+            await asyncio.sleep(self.retry_sleep_time)
         app.create_task(self.update(app))
+        self.mutex.append('whole')
+        
         await self._connect()
         self.as_df = await self._get_df()
-        Log.info(f"Updated {self.name} df")
+        del self.mutex[self.mutex.index('whole')]
+
+        Log.info(f"Updated whole df {self.name}")
         Log.debug(f"\n\n{self.as_df}\n\n")
         await self._post_update()
     
@@ -113,26 +118,35 @@ class AbstractSheetAdapter():
         } for x in rowcols ]
     
     async def _update_record(self, uid: str|int, key: str, value: str):
-        self.mutex.append(uid)
         selector = self.selector(uid)
         if self.as_df.loc[selector].empty:
             return
         self.as_df.loc[selector, key] = value
         wks_row = self.wks_row(uid)
         wks_col = self.wks_col(key)
-        Log.info(f"Prepeared to update single record in table {self.name} with {self.uid_col} {uid}")
-        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
+        
+        Log.info(f"Prepeared to update single record in {self.name} with {self.uid_col} {uid} write to {key} collumn")
+        while len(self.mutex) > 0:
+            Log.info(f"Halted single update record in {self.name} with {self.uid_col} {uid} write to {key} collumn with mutex {self.mutex}")
+            await asyncio.sleep(self.retry_sleep_time)
+        
+        self.mutex.append(uid)
         await self.wks.update_cell(wks_row, wks_col, value)
         del self.mutex[self.mutex.index(uid)]
-        Log.info(f"Done update single record in table {self.name} with {self.uid_col} {uid}")
+        
+        Log.info(f"Done update single record in {self.name} with {self.uid_col} {uid} write to {key} collumn")
         Log.debug(f"Current mutext at {self.name} is {self.mutex}")
     
     async def _batch_update_or_create_record(self, uid: str|int, save_to = None, save_as = None, app: Application = None, **record_params):
-        self.mutex.append(uid)
         exists = self.exists(uid)
         record_action = 'update' if exists else 'create'
-        Log.info(f"Prepeared to {record_action} record in table {self.name} with {self.uid_col} {uid}")
-        Log.debug(f"Current mutext at {self.name} is {self.mutex}")
+        collumns = record_params.keys()
+        
+        Log.info(f"Prepeared to batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns")
+        while len(self.mutex) > 0:
+            Log.info(f"Halted to batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns with mutex {self.mutex}")
+            await asyncio.sleep(self.retry_sleep_time)
+        self.mutex.append(uid)
 
         get_file = None
         for key,val in record_params.items():
@@ -159,11 +173,13 @@ class AbstractSheetAdapter():
             (wks_row, self.wks_col(key), value)
             for key, value in record_params.items()
         ])
+        
         await self.wks.batch_update(wks_update)
         if get_file != None and save_to != None and save_as != None and app != None:
             app.create_task(SaveToDrive(self.agc.gc.auth.token, save_to, save_as, get_file))
+        
         del self.mutex[self.mutex.index(uid)]
-        Log.info(f"Done {record_action} record in table {self.name} with {self.uid_col} {uid}")
+        Log.info(f"Done batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns")
         Log.debug(f"Current mutext at {self.name} is {self.mutex}")
     
     def _get(self, selector, iloc = 0) -> pd.Series:

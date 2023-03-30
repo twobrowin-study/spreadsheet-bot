@@ -8,7 +8,7 @@ from sheets.settings import Settings
 
 class KeyboardAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('keyboard', 'keyboard', None, True)
+        super().__init__('keyboard', 'keyboard', initialize_as_df=True)
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.keyboard

@@ -7,7 +7,7 @@ from log import Log
 
 class LogSheetAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('logs', 'log-sheet', None, False)
+        super().__init__('logs', 'log-sheet')
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.logs

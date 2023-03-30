@@ -18,7 +18,7 @@ class NotificationsAdapterClass(AbstractSheetAdapter):
     CALLBACK_ANSWER_SEPARATOR = '_'
 
     def __init__(self) -> None:
-        super().__init__('notifications', 'notifications', None, True)
+        super().__init__('notifications', 'notifications', initialize_as_df=True)
 
         self.selector_to_notify = lambda: (
             (self.as_df.is_active == I18n.yes) &

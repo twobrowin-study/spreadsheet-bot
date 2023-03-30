@@ -9,7 +9,7 @@ from errors import BotShouldBeInactive
 
 class SwitchAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('switch', 'switch', SwitchUpdateTime, True)
+        super().__init__('switch', 'switch', SwitchUpdateTime, None, True)
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.switch

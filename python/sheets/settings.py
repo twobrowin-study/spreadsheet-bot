@@ -10,7 +10,7 @@ from sheets.i18n import I18n
 
 class SettingsAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('settings', 'settings', SettingsUpdateTime, True)
+        super().__init__('settings', 'settings', SettingsUpdateTime, None, True)
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.settings

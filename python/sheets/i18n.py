@@ -3,7 +3,7 @@ from sheets.sheet import AbstractSheetAdapter
 
 class I18nAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('i18n', 'i18n', None, True)
+        super().__init__('i18n', 'i18n', initialize_as_df=True)
     
     async def _get_df(self) -> pd.DataFrame:
         return pd.DataFrame(await self.wks.get_all_records())

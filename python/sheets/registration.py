@@ -8,7 +8,7 @@ from sheets.settings import Settings
 
 class RegistrationAdapterClass(AbstractSheetAdapter):
     def __init__(self) -> None:
-        super().__init__('registration', 'registration', None, True)
+        super().__init__('registration', 'registration', initialize_as_df=True)
     
     async def _pre_async_init(self):
         self.sheet_name = I18n.registration

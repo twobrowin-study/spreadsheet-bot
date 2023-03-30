@@ -44,7 +44,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
     USER_CHANGE_STATE_SEPARATORS = '_|@'
 
     def __init__(self) -> None:
-        super().__init__('users', 'users', None, True)
+        super().__init__('users', 'users', initialize_as_df=True)
         
         self.PrivateChatFilter                = self.PrivateChatClass(outer_obj=self)
         self.IsRegistrationOpenedFilter       = self.IsRegistrationOpenedClass(outer_obj=self)
@@ -101,6 +101,7 @@ class UsersAdapterClass(AbstractSheetAdapter):
     async def _pre_async_init(self):
         self.sheet_name = I18n.users
         self.update_sleep_time = Settings.users_update_time
+        self.retry_sleep_time  = Settings.retry_time
     
     async def _get_df(self) -> pd.DataFrame:
         df = pd.DataFrame(await self.wks.get_all_records())
