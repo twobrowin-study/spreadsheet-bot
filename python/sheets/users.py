@@ -43,15 +43,6 @@ class UsersAdapterClass(AbstractSheetAdapter):
     USER_CHANGE_STATE_TEMPLATE   = '{user_change}_{state}@{message_id}'
     USER_CHANGE_STATE_SEPARATORS = '_|@'
 
-    CALLBACK_NOTIFICATION_SET_STATE_PREFIX   = 'user_notification_set_state_'
-    CALLBACK_NOTIFICATION_SET_STATE_TEMPLATE = 'user_notification_set_state_{state}'
-    CALLBACK_NOTIFICATION_SET_STATE_PATTERN  = 'user_notification_set_state_*'
-
-    CALLBACK_NOTIFICATION_ANSWER_PREFIX    = 'user_notification_answer_'
-    CALLBACK_NOTIFICATION_ANSWER_TEMPLATE  = 'user_notification_answer_{state}_{answer}'
-    CALLBACK_NOTIFICATION_ANSWER_PATTERN   = 'user_notification_answer_*'
-    CALLBACK_NOTIFICATION_ANSWER_SEPARATOR = '_'
-
     def __init__(self) -> None:
         super().__init__('users', 'users', None, True)
         
@@ -145,29 +136,12 @@ class UsersAdapterClass(AbstractSheetAdapter):
             return(message.document, document_link)
         return (None, None)
     
-    async def send_notification_to_all_users(self, bot: Bot, message: str, parse_mode: str, 
-        send_photo: str = None, state: str = None, button_text: list[str] = ''
-    ):
-        reply_markup = None
-        if len(button_text) == 1:
-            reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton(button_text[0],
-                    callback_data=self.CALLBACK_NOTIFICATION_SET_STATE_TEMPLATE.format(state=state)
-                )]
-            ])
-        elif len(button_text) > 1:
-            reply_markup = InlineKeyboardMarkup([
-                [InlineKeyboardButton(button_text[idx],
-                    callback_data=self.CALLBACK_NOTIFICATION_ANSWER_TEMPLATE.format(state=state, answer=idx)
-                )]
-                for idx in range(len(button_text))
-            ])
-        
+    async def send_notification_to_all_users(self, bot: Bot, message: str, parse_mode: str, send_photo: str = None, state: str = None):
         await self._send_to_all_uids(
             self.selector_all_active(),
             bot, message, parse_mode,
             send_photo,
-            reply_markup=reply_markup
+            reply_markup=Notifications.get_keyboard(state)
         )
     
     class PrivateChatClass(AbstractSheetAdapter.AbstractFilter):
@@ -390,12 +364,12 @@ class UsersAdapterClass(AbstractSheetAdapter):
         state = self.state(update.effective_chat.id)
         await update.message.reply_markdown(
             template.format(template = Notifications.get_text_markdown(state)),
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=Notifications.get_keyboard(state)
         )
     
     async def notification_set_state_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer()
-        state = update.callback_query.data.removeprefix(self.CALLBACK_NOTIFICATION_SET_STATE_PREFIX)
+        state = update.callback_query.data.removeprefix(Notifications.CALLBACK_SET_STATE_PREFIX)
         await context.bot.send_message(
             update.effective_chat.id,
             Notifications.get_button_answer(state),
@@ -407,8 +381,8 @@ class UsersAdapterClass(AbstractSheetAdapter):
     async def notification_answer_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer()
         state,answer_idx = update.callback_query.data\
-            .removeprefix(self.CALLBACK_NOTIFICATION_ANSWER_PREFIX)\
-            .split(self.CALLBACK_NOTIFICATION_ANSWER_SEPARATOR)
+            .removeprefix(Notifications.CALLBACK_ANSWER_PREFIX)\
+            .split(Notifications.CALLBACK_ANSWER_SEPARATOR)
         text,answer = Notifications.get_button_answer(state, int(answer_idx))
         await context.bot.send_message(
             update.effective_chat.id,

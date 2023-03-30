@@ -19,8 +19,7 @@ async def PerfomNotification(app: Application):
     Log.info("Start performing notification")
     for idx,row in Notifications.as_df.loc[Notifications.selector_to_notify()].iterrows():
         await Users.send_notification_to_all_users(
-            app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture,
-            row.state, row.button_text
+            app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture, row.state
         )
         if row.state == "":
             await Groups.send_to_all_normal_groups(app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture)

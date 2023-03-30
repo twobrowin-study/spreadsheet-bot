@@ -1,3 +1,4 @@
+from telegram import InlineKeyboardMarkup,InlineKeyboardButton
 import pandas as pd
 from sheets.sheet import AbstractSheetAdapter
 
@@ -7,6 +8,15 @@ from sheets.settings import Settings
 from datetime import datetime
 
 class NotificationsAdapterClass(AbstractSheetAdapter):
+    CALLBACK_SET_STATE_PREFIX   = 'notification_set_state_'
+    CALLBACK_SET_STATE_TEMPLATE = 'notification_set_state_{state}'
+    CALLBACK_SET_STATE_PATTERN  = 'notification_set_state_*'
+
+    CALLBACK_ANSWER_PREFIX    = 'notification_answer_'
+    CALLBACK_ANSWER_TEMPLATE  = 'notification_answer_{state}_{answer}'
+    CALLBACK_ANSWER_PATTERN   = 'notification_answer_*'
+    CALLBACK_ANSWER_SEPARATOR = '_'
+
     def __init__(self) -> None:
         super().__init__('notifications', 'notifications', None, True)
 
@@ -66,6 +76,23 @@ class NotificationsAdapterClass(AbstractSheetAdapter):
             return row.button_answer[0]
         if len(row.button_text) > 1 and answer_idx in range(len(row.button_text)):
             return row.button_answer[answer_idx], row.button_text[answer_idx]
+        return None
+
+    def get_keyboard(self, state: str) -> InlineKeyboardMarkup|None:
+        button_text = self.get(state).button_text
+        if len(button_text) == 1:
+            return InlineKeyboardMarkup([
+                [InlineKeyboardButton(button_text[0],
+                    callback_data=self.CALLBACK_SET_STATE_TEMPLATE.format(state=state)
+                )]
+            ])
+        if len(button_text) > 1:
+            return InlineKeyboardMarkup([
+                [InlineKeyboardButton(button_text[idx],
+                    callback_data=self.CALLBACK_ANSWER_TEMPLATE.format(state=state, answer=idx)
+                )]
+                for idx in range(len(button_text))
+            ])
         return None
 
 Notifications = NotificationsAdapterClass()

@@ -147,8 +147,8 @@ if __name__ == '__main__':
     ], group=UPDATE_GROUP_USER_REQUEST)
 
     app.add_handlers([
-        CallbackQueryHandler(Users.notification_set_state_callback_handler, pattern=Users.CALLBACK_NOTIFICATION_SET_STATE_PATTERN, block=False),
-        CallbackQueryHandler(Users.notification_answer_callback_handler,    pattern=Users.CALLBACK_NOTIFICATION_ANSWER_PATTERN,    block=False),
+        CallbackQueryHandler(Users.notification_set_state_callback_handler, pattern=Notifications.CALLBACK_SET_STATE_PATTERN, block=False),
+        CallbackQueryHandler(Users.notification_answer_callback_handler,    pattern=Notifications.CALLBACK_ANSWER_PATTERN,    block=False),
         CommandHandler(START_COMMAND, Users.restart_help_notification_handler, filters=Users.HasNotificationRegistrationStateFilter, block=False),
         CommandHandler(HELP_COMMAND,  Users.restart_help_notification_handler, filters=Users.HasNotificationRegistrationStateFilter, block=False),
         MessageHandler(Users.HasNotificationRegistrationStateFilter, Users.notification_reply_handler, block=False),
