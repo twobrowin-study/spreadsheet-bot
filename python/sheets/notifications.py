@@ -8,13 +8,13 @@ from sheets.settings import Settings
 from datetime import datetime
 
 class NotificationsAdapterClass(AbstractSheetAdapter):
-    CALLBACK_SET_STATE_PREFIX   = 'notification_set_state_'
-    CALLBACK_SET_STATE_TEMPLATE = 'notification_set_state_{state}'
-    CALLBACK_SET_STATE_PATTERN  = 'notification_set_state_*'
+    CALLBACK_SET_STATE_PREFIX   = 'user_notification_set_state_'
+    CALLBACK_SET_STATE_TEMPLATE = 'user_notification_set_state_{state}'
+    CALLBACK_SET_STATE_PATTERN  = 'user_notification_set_state_*'
 
-    CALLBACK_ANSWER_PREFIX    = 'notification_answer_'
-    CALLBACK_ANSWER_TEMPLATE  = 'notification_answer_{state}_{answer}'
-    CALLBACK_ANSWER_PATTERN   = 'notification_answer_*'
+    CALLBACK_ANSWER_PREFIX    = 'user_notification_answer_'
+    CALLBACK_ANSWER_TEMPLATE  = 'user_notification_answer_{state}_{answer}'
+    CALLBACK_ANSWER_PATTERN   = 'user_notification_answer_*'
     CALLBACK_ANSWER_SEPARATOR = '_'
 
     def __init__(self) -> None:
