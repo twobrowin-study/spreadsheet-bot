@@ -33,7 +33,7 @@ class AbstractSheetAdapter():
     def __init__(self, sheet_name: str, name: str, update_sleep_time: int = None, retry_sleep_time: int = None, initialize_as_df: bool = False) -> None:
         self.sheet_name = sheet_name
         self.name = name
-        self.update_sleep_time = update_sleep_time
+        self.update_sleep_time = update_sleep_time if update_sleep_time is not None else 3600
         self.retry_sleep_time = retry_sleep_time if retry_sleep_time is not None else update_sleep_time
         self.initialize_as_df = initialize_as_df
 
@@ -47,7 +47,7 @@ class AbstractSheetAdapter():
         self.exists   = lambda uid: not self.as_df.loc[self.selector(uid)].empty
 
         self.mutex = []
-        self.whole_mutex = 'whole'
+        self.whole_mutex = False
     
     async def async_init(self):
         await self._pre_async_init()
@@ -85,11 +85,11 @@ class AbstractSheetAdapter():
             Log.info(f"Halted whole df update at {self.name} with mutex {self.mutex}")
             await asyncio.sleep(self.retry_sleep_time)
         app.create_task(self.update(app))
-        self.mutex.append(self.whole_mutex)
+        self.whole_mutex = True
         
         await self._connect()
         self.as_df = await self._get_df()
-        del self.mutex[self.mutex.index(self.whole_mutex)]
+        self.whole_mutex = False
 
         Log.info(f"Updated whole df {self.name}")
         Log.debug(f"\n\n{self.as_df}\n\n")
@@ -127,8 +127,8 @@ class AbstractSheetAdapter():
         wks_col = self.wks_col(key)
         
         Log.info(f"Prepeared to update single record in {self.name} with {self.uid_col} {uid} write to {key} collumn")
-        while self.whole_mutex in self.mutex:
-            Log.info(f"Halted single update record in {self.name} with {self.uid_col} {uid} write to {key} collumn with mutex {self.mutex}")
+        while self.whole_mutex:
+            Log.info(f"Halted single update record in {self.name} with {self.uid_col} {uid} write to {key} collumn with whole mutex")
             await asyncio.sleep(self.retry_sleep_time)
         
         self.mutex.append(uid)
@@ -144,8 +144,8 @@ class AbstractSheetAdapter():
         collumns = record_params.keys()
         
         Log.info(f"Prepeared to batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns")
-        while self.whole_mutex in self.mutex:
-            Log.info(f"Halted to batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns with mutex {self.mutex}")
+        while self.whole_mutex:
+            Log.info(f"Halted to batch update {record_action} record in {self.name} with {self.uid_col} {uid} and {collumns} collumns with whole mutex")
             await asyncio.sleep(self.retry_sleep_time)
         self.mutex.append(uid)
 
