@@ -13,6 +13,7 @@ class KeyboardAdapterClass(AbstractSheetAdapter):
     async def _pre_async_init(self):
         self.sheet_name = I18n.keyboard
         self.REGISTER_FUNCTION = I18n.register
+        self.START_REGISTRATION_FUNCTION = I18n.start_registration
         self.update_sleep_time = Settings.keyboard_update_time
     
     async def _get_df(self) -> pd.DataFrame:

@@ -31,6 +31,8 @@ from log import Log
 from datetime import datetime
 import re
 
+import asyncio
+
 class UsersAdapterClass(AbstractSheetAdapter):
     CALLBACK_USER_SET_INACTIVE         = 'user_set_inactive'
     CALLBACK_USER_SET_ACTIVE           = 'user_set_active'
@@ -42,6 +44,8 @@ class UsersAdapterClass(AbstractSheetAdapter):
 
     USER_CHANGE_STATE_TEMPLATE   = '{user_change}_{state}@{message_id}'
     USER_CHANGE_STATE_SEPARATORS = '_|@'
+
+    START_REGISTRATION_CALLBACK_DATA = 'user_start_registration'
 
     def __init__(self) -> None:
         super().__init__('users', 'users', initialize_as_df=True)
@@ -200,18 +204,24 @@ class UsersAdapterClass(AbstractSheetAdapter):
         await update.edited_message.reply_markdown(Settings.edited_message_reply)
         
     async def start_registration_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-        registration_first = Registration.first
-        
-        await update.message.reply_markdown(Settings.start_template.format(
-            template = registration_first.question
-        ), reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_markdown(Settings.start_template, reply_markup=Keyboard.reply_keyboard)
         
         await self._batch_update_or_create_record(update.effective_chat.id,
             datetime      = datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             username      = update.effective_chat.username,
             is_bot_banned = I18n.no,
-            state         = registration_first.state,
+            is_active     = I18n.yes
         )
+
+        count = self.active_user_count()
+        if self.should_send_report(count):
+            context.application.create_task(
+                Groups.send_to_all_admin_groups(
+                    context.bot,
+                    Report.currently_active_users_template.format(count=count),
+                    ParseMode.MARKDOWN
+                )
+            )
     
     async def restart_help_registration_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         registration = Registration.get(self.state(update.effective_chat.id))
@@ -221,6 +231,10 @@ class UsersAdapterClass(AbstractSheetAdapter):
             reply_markup=registration.reply_keyboard
         )
     
+    async def _connect(self):
+        await super()._connect()
+        self.quest_wks = await self.sh.worksheet(Settings.quest_sheet)
+    
     async def proceed_registration_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         user    = self.get(update.effective_chat.id)
         state   = user.state
@@ -228,37 +242,31 @@ class UsersAdapterClass(AbstractSheetAdapter):
         registration_curr = Registration.get(state)
         registration_next = Registration.get_next(state)
 
-        last_main_state = (state == Registration.last_main_state)
-        last_state      = (state == Registration.last_state)
+        last_state = (state == Registration.last_state)
 
         state_val, save_to = self._prepare_state_to_save(update.message, registration_curr.document_link)
         if state_val == None:
             await update.message.reply_markdown(registration_curr.question, reply_markup=registration_curr.reply_keyboard)
             return
-
+        
         if last_state:
-            await update.message.reply_markdown(Settings.registration_complete, reply_markup=Keyboard.reply_keyboard)
+            await update.message.reply_markdown(Settings.registration_pre_complete, reply_markup=ReplyKeyboardRemove())
         else:
             await update.message.reply_markdown(registration_next.question, reply_markup=registration_next.reply_keyboard)
 
         update_vals = {state: state_val}
-        if last_main_state:
-            update_vals['is_active'] = I18n.yes
-        
         await self._batch_update_or_create_record(update.effective_chat.id, save_to=save_to, save_as=save_as, app=context.application,
             state = '' if last_state else registration_next.state,
             **update_vals
         )
 
-        count = self.active_user_count()
-        if last_main_state and self.should_send_report(count):
-            context.application.create_task(
-                Groups.send_to_all_admin_groups(
-                    context.bot,
-                    Report.currently_active_users_template.format(count=count),
-                    ParseMode.MARKDOWN
-                )
-            )
+        if last_state:
+            await asyncio.sleep(1)
+            uid = update.effective_chat.id
+            quest_cell = (await self.quest_wks.cell(self.wks_row(uid), Settings.quest_collumn))
+            quest_text = quest_cell.value
+            Log.info(f"Got quest cell for user {uid} with text {quest_text}")
+            await update.message.reply_markdown(Settings.registration_complete.format(template=quest_text), reply_markup=Keyboard.reply_keyboard)
     
     async def restart_help_on_registration_complete_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         template = Settings.user_template_from_update(update)
@@ -275,17 +283,27 @@ class UsersAdapterClass(AbstractSheetAdapter):
                 keyboard_row.text_markdown.format(user=self.user_data_markdown(user)),
                 reply_markup=self.user_data_inline_keyboard(user)
             )
-        elif keyboard_row.send_picture == '':
+            return
+        
+        reply_keyboard = Keyboard.reply_keyboard
+        if keyboard_row.function == Keyboard.START_REGISTRATION_FUNCTION:
+            reply_keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    Keyboard.START_REGISTRATION_FUNCTION,
+                    callback_data=self.START_REGISTRATION_CALLBACK_DATA
+                )]
+            ])
+        if keyboard_row.send_picture == '':
             await update.message.reply_markdown(
                 keyboard_row.text_markdown,
-                reply_markup=Keyboard.reply_keyboard
+                reply_markup=reply_keyboard
             )
         elif keyboard_row.send_picture != '' and len(keyboard_row.text_markdown) <= 1024:
             await update.message.reply_photo(
                 keyboard_row.send_picture,
                 caption=keyboard_row.text_markdown,
                 parse_mode=ParseMode.MARKDOWN,
-                reply_markup=Keyboard.reply_keyboard
+                reply_markup=reply_keyboard
             )
         elif keyboard_row.send_picture != '' and len(keyboard_row.text_markdown) > 1024:
             await update.message.reply_markdown(
@@ -293,8 +311,13 @@ class UsersAdapterClass(AbstractSheetAdapter):
             )
             await update.message.reply_photo(
                 keyboard_row.send_picture,
-                reply_markup=Keyboard.reply_keyboard
+                reply_markup=reply_keyboard
             )
+    
+    async def registration_start_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        registration_first = Registration.first
+        await update.callback_query.message.reply_markdown(registration_first.question, reply_markup=registration_first.reply_keyboard)
+        await self._update_record(update.effective_chat.id, 'state', registration_first.state)
     
     async def set_active_state_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.callback_query.answer()

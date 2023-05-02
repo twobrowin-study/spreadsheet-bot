@@ -139,6 +139,7 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(Users.KeyboardKeyInputFilter, Users.keyboard_key_handler, block=False), group=UPDATE_GROUP_USER_REQUEST)
 
     app.add_handlers([
+        CallbackQueryHandler(Users.registration_start_callback_handler, pattern=Users.START_REGISTRATION_CALLBACK_DATA, block=False),
         CallbackQueryHandler(Users.set_active_state_callback_handler, pattern=Users.CALLBACK_USER_ACTIVE_STATE_PATTERN, block=False),
         CallbackQueryHandler(Users.change_state_callback_handler,     pattern=Users.CALLBACK_USER_CHANGE_STATE_PATTERN, block=False),
         CommandHandler(START_COMMAND, Users.restart_help_change_state_handler, filters=Users.HasChangeRegistrationStateFilter, block=False),
