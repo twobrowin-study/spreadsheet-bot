@@ -14,6 +14,7 @@ class KeyboardAdapterClass(AbstractSheetAdapter):
         self.sheet_name = I18n.keyboard
         self.REGISTER_FUNCTION = I18n.register
         self.update_sleep_time = Settings.keyboard_update_time
+        self.retry_sleep_time  = self.update_sleep_time // 2
     
     async def _get_df(self) -> pd.DataFrame:
         df = pd.DataFrame(await self.wks.get_all_records())

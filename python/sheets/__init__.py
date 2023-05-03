@@ -19,13 +19,16 @@ async def PerfomNotification(app: Application):
     Log.info("Start performing notification")
     for idx,row in Notifications.as_df.loc[Notifications.selector_to_notify()].iterrows():
         await Users.send_notification_to_all_users(
-            app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture, row.state
+            app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture, row.state, row.condition
         )
         if row.state == "":
             await Groups.send_to_all_normal_groups(app.bot, row.text_markdown, ParseMode.MARKDOWN, row.send_picture)
+        admin_group_text = \
+            Settings.notification_admin_groups_template.format(message=row.text_markdown) if row.condition == None \
+            else Settings.notification_admin_groups_condition_template.format(message=row.text_markdown, condition=row.condition)
         await Groups.send_to_all_admin_groups(
             app.bot, 
-            Settings.notification_admin_groups_template.format(message=row.text_markdown),
+            admin_group_text,
             ParseMode.MARKDOWN,
             row.send_picture
         )

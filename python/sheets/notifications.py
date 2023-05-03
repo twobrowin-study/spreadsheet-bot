@@ -30,6 +30,7 @@ class NotificationsAdapterClass(AbstractSheetAdapter):
     async def _pre_async_init(self):
         self.sheet_name = I18n.notifications
         self.update_sleep_time = Settings.notifications_update_time
+        self.retry_sleep_time  = self.update_sleep_time // 2
     
     async def _get_df(self) -> pd.DataFrame:
         df = pd.DataFrame(await self.wks.get_all_records())

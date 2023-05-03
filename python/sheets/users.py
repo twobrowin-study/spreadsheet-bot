@@ -93,8 +93,8 @@ class UsersAdapterClass(AbstractSheetAdapter):
                 callback_data=self.CALLBACK_USER_SET_INACTIVE if self.is_active(user) else self.CALLBACK_USER_SET_ACTIVE
             )
         ]])
-        self.selector_all_active = lambda: (
-            (self.as_df.is_active == I18n.yes) &
+        self.selector_condition = lambda column: (
+            (self.as_df[column] == I18n.yes) &
             (self.as_df.is_bot_banned == I18n.no)
         )
     
@@ -137,9 +137,12 @@ class UsersAdapterClass(AbstractSheetAdapter):
             return(message.document, document_link)
         return (None, None)
     
-    async def send_notification_to_all_users(self, bot: Bot, message: str, parse_mode: str, send_photo: str = None, state: str = None):
+    async def send_notification_to_all_users(self, bot: Bot, message: str, parse_mode: str,
+                                             send_photo: str = None, state: str = None,
+                                             condition: str = None):
+        condition_column = 'is_active' if condition in [None, ''] else condition
         await self._send_to_all_uids(
-            self.selector_all_active(),
+            self.selector_condition(condition_column),
             bot, message, parse_mode,
             send_photo,
             reply_markup=Notifications.get_keyboard(state)
